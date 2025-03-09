@@ -12,3 +12,6 @@ int main(){
     printf("Size of pointer:      %lu bytes\n", sizeof(void *));
     return 0;
 }
+
+// pointer size depends on the system, if it's 32-bit then * is 4 bytes (4*8 = 32-bit)
+// if it is 64-bit system then it is 8 bytes (8*8 = 64-bit), rest of datatype all the same.
