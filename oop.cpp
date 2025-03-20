@@ -37,12 +37,13 @@ int main(){
     cout<<"After asigned = "<<speed<<endl; // 設定後
 /*---------------繼承(inheritance) : 子類別可繼承父類別之資料及行為-------------------------------------------------------*/
     cout<<"----------------------------繼承(inheritance)----------------------------------------------------"<<endl;
-    DetailOfCar mycar1;
+    DetailOfCar mycar1; //!!
     mycar1.setColor("black");
     mycar1.setSpeed(50);
-    cout<<"繼承getSpeed成功-> speed = " <<mycar1.getSpeed() <<endl;
+    cout<<"繼承getSpeed()成功-> speed = " <<mycar1.getSpeed() <<endl;
 
-
+/*---------------多型(polymorphism) : 允許相同的介面、方法在不同類別中有不同的實作方式---------------------------------------*/
+    cout<<"----------------------------多型(polymorphism)----------------------------------------------------"<<endl;
 
 
 }
