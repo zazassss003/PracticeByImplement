@@ -3,25 +3,63 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/uaccess.h>
+#include <linux/ioport.h>
+#include <linux/io.h>
 
 
 #define DRIVER_NAME  "drvled"
 
 
-#define LED_OFF        0
-#define LED_ON         1
+#define LED_OFF	0
+#define LED_ON	1
+
+
+#define GPIO1_BASE	0x0209C000
+#define GPIO1_SIZE	8
+
+
+#define GPIO1_REG_DATA	0
+#define GPIO1_REG_DIR	4
+
+
+#define GPIO_BIT	(1 << 9)
 
 
 static struct {
 	dev_t devnum;
 	struct cdev cdev;
 	unsigned int led_status;
+	void __iomem *regbase;
 } drvled_data;
 
 
 static void drvled_setled(unsigned int status)
 {
+	u32 val;
+
+
+	/* set value */
+	val = readl(drvled_data.regbase + GPIO1_REG_DATA);
+	if (status == LED_ON)
+		val |= GPIO_BIT;
+	else if (status == LED_OFF)
+		val &= ~GPIO_BIT;
+	writel(val, drvled_data.regbase + GPIO1_REG_DATA);
+
+
+	/* update status */
 	drvled_data.led_status = status;
+}
+
+
+static void drvled_setdirection(void)
+{
+	u32 val;
+
+
+	val = readl(drvled_data.regbase + GPIO1_REG_DIR);
+	val |= GPIO_BIT;
+	writel(val, drvled_data.regbase + GPIO1_REG_DIR);
 }
 
 
@@ -85,13 +123,28 @@ static const struct file_operations drvled_fops = {
 
 static int __init drvled_init(void)
 {
-	int result;
+	int result = 0;
+
+
+	if (!request_mem_region(GPIO1_BASE, GPIO1_SIZE, DRIVER_NAME)) {
+		pr_err("%s: Error requesting I/O!\n", DRIVER_NAME);
+		result = -EBUSY;
+		goto ret_err_request_mem_region;
+	}
+
+
+	drvled_data.regbase = ioremap(GPIO1_BASE, GPIO1_SIZE);
+	if (!drvled_data.regbase) {
+		pr_err("%s: Error mapping I/O!\n", DRIVER_NAME);
+		result = -ENOMEM;
+		goto err_ioremap;
+	}
 
 
 	result = alloc_chrdev_region(&drvled_data.devnum, 0, 1, DRIVER_NAME);
 	if (result) {
 		pr_err("%s: Failed to allocate device number!\n", DRIVER_NAME);
-		return result;
+		goto ret_err_alloc_chrdev_region;
 	}
 
 
@@ -101,16 +154,29 @@ static int __init drvled_init(void)
 	result = cdev_add(&drvled_data.cdev, drvled_data.devnum, 1);
 	if (result) {
 		pr_err("%s: Char device registration failed!\n", DRIVER_NAME);
-		unregister_chrdev_region(drvled_data.devnum, 1);
-		return result;
+		goto ret_err_cdev_add;
 	}
+
+
+	drvled_setdirection();
 
 
 	drvled_setled(LED_OFF);
 
 
 	pr_info("%s: initialized.\n", DRIVER_NAME);
-	return 0;
+	goto ret_ok;
+
+
+ret_err_cdev_add:
+	unregister_chrdev_region(drvled_data.devnum, 1);
+ret_err_alloc_chrdev_region:
+	iounmap(drvled_data.regbase);
+err_ioremap:
+	release_mem_region(GPIO1_BASE, GPIO1_SIZE);
+ret_err_request_mem_region:
+ret_ok:
+	return result;
 }
 
 
@@ -118,6 +184,8 @@ static void __exit drvled_exit(void)
 {
 	cdev_del(&drvled_data.cdev);
 	unregister_chrdev_region(drvled_data.devnum, 1);
+	iounmap(drvled_data.regbase);
+	release_mem_region(GPIO1_BASE, GPIO1_SIZE);
 	pr_info("%s: exiting.\n", DRIVER_NAME);
 }
 
@@ -127,6 +195,5 @@ module_exit(drvled_exit);
 
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Sergio Prado <sergio.prado@e-labworks.com>");
 MODULE_VERSION("1.0");
 
